@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enshrouded Server-Einrichtung</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c;
+            color: #e2e8f0;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="bg-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-4xl">
+        <h1 class="text-3xl font-bold text-center text-teal-400 mb-2">Enshrouded Server-Anleitung</h1>
+        <p class="text-center text-gray-400 mb-6">Folgen Sie den Schritten, um Ihren dedizierten Enshrouded-Server in Proxmox einzurichten.</p>
+        
+        <div class="space-y-6">
+            <div id="step-container" class="bg-gray-700 p-6 rounded-lg shadow-inner">
+                <h2 id="step-title" class="text-xl font-semibold mb-2 text-blue-300">Schritt 1: Container-Vorlage herunterladen</h2>
+                <p id="step-description" class="text-gray-300">Wählen Sie im Proxmox-Interface "Storage" und dann "CT Templates", um eine Ubuntu-Vorlage herunterzuladen.</p>
+                
+                <div id="step-command-block" class="bg-gray-900 p-4 rounded-md mt-4 hidden">
+                    <p class="text-sm font-mono text-green-300" id="step-command"></p>
+                    <button id="copy-button" class="mt-4 bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 ease-in-out">
+                        Befehl kopieren
+                    </button>
+                </div>
+
+                <p id="step-note" class="text-sm text-yellow-400 mt-4 hidden"></p>
+            </div>
+            
+            <div class="flex justify-between items-center">
+                <button id="prev-button" class="bg-gray-600 hover:bg-gray-700 text-gray-200 font-bold py-2 px-4 rounded-lg transition duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
+                    Zurück
+                </button>
+                <div class="text-sm font-semibold text-gray-500">
+                    Schritt <span id="current-step-number">1</span> von <span id="total-steps">1</span>
+                </div>
+                <button id="next-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 ease-in-out">
+                    Weiter
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const steps = [
+            {
+                title: 'Schritt 1: Container-Vorlage herunterladen',
+                description: 'Navigieren Sie im Proxmox-Interface zur Registerkarte "Storage" und wählen Sie "CT Templates", um eine Ubuntu-Vorlage herunterzuladen.',
+                command: 'pveam update && pveam download local ubuntu-24.04-standard_24.04-1_amd64.tar.zst',
+                note: 'Führen Sie diesen Befehl in der Shell Ihres Proxmox-Hosts aus.'
+            },
+            {
+                title: 'Schritt 2: Container erstellen',
+                description: 'Klicken Sie im Proxmox-Webinterface auf "Create CT" und geben Sie die folgenden Daten ein:',
+                details: [
+                    'Allgemein: Geben Sie eine CT ID (z.B. 101) und einen Hostnamen (z.B. "enshrouded-server") ein.',
+                    'Vorlage: Wählen Sie die heruntergeladene Ubuntu-Vorlage.',
+                    'Datenträger: Weisen Sie mindestens 30 GB zu.',
+                    'CPU: Weisen Sie 4 Kerne zu.',
+                    'Arbeitsspeicher: Weisen Sie 8192 MB (8 GB) zu und deaktivieren Sie "Swap-Speicher".',
+                    'Netzwerk: Konfigurieren Sie eine statische IP-Adresse (z.B. 192.168.1.50).'
+                ],
+                command: null,
+                note: null
+            },
+            {
+                title: 'Schritt 3: CPU-Feinabstimmung (Optional aber empfohlen)',
+                description: 'Um eine optimale Leistung zu gewährleisten, binden Sie den Container an die CPU-Kerne des Host-Systems. Fahren Sie den Container herunter und fügen Sie die folgende Zeile zur Konfigurationsdatei hinzu:',
+                command: 'nano /etc/pve/lxc/101.conf',
+                note: 'Ersetzen Sie "101" durch Ihre Container-ID. Fügen Sie die Zeile lxc.cgroup.cpuset.cpus=0,1,2,3 hinzu und starten Sie den Container neu.'
+            },
+            {
+                title: 'Schritt 4: Abhängigkeiten installieren',
+                description: 'Nachdem der Container gestartet ist, öffnen Sie die Shell und installieren Sie die erforderlichen Pakete, einschließlich Wine und SteamCMD.',
+                command: 'sudo dpkg --add-architecture i386 && sudo apt update && sudo apt install -y curl wget file tar bzip2 gzip unzip bsdmainutils python util-linux ca-certificates binutils bc jq tmux lib32gcc-s1 wine64 steamcmd',
+                note: 'Führen Sie diesen Befehl als Root-Benutzer aus.'
+            },
+            {
+                title: 'Schritt 5: Dedizierten Benutzer erstellen',
+                description: 'Erstellen Sie einen neuen Benutzer, der den Spieleserver ausführen wird, um die Sicherheit zu erhöhen.',
+                command: 'adduser enshroudedserver',
+                note: 'Folgen Sie den Anweisungen, um ein Passwort festzulegen.'
+            },
+            {
+                title: 'Schritt 6: LinuxGSM installieren',
+                description: 'Wechseln Sie zum neuen Benutzer und laden Sie das LinuxGSM-Skript herunter und installieren Sie es.',
+                command: 'su - enshroudedserver && wget -O linuxgsm.sh https://linuxgsm.sh && chmod +x linuxgsm.sh && bash linuxgsm.sh enshroudedserver',
+                note: 'Stellen Sie sicher, dass Sie als enshroudedserver angemeldet sind, bevor Sie den nächsten Schritt ausführen.'
+            },
+            {
+                title: 'Schritt 7: Serverdateien installieren',
+                description: 'Installieren Sie nun die Enshrouded-Serverdateien mit dem LGSM-Befehl. LGSM wird SteamCMD automatisch starten.',
+                command: './enshroudedserver install',
+                note: 'Stellen Sie sicher, dass LGSM die Windows-Binärdateien herunterlädt. Dies wird automatisch gehandhabt, aber es ist der häufigste Fehlerpunkt.'
+            },
+            {
+                title: 'Schritt 8: Konfigurationsdatei anpassen',
+                description: 'Navigieren Sie in das Serververzeichnis und bearbeiten Sie die Konfigurationsdatei, um den Servernamen, das Passwort und die Spieleranzahl festzulegen.',
+                command: 'nano ~/enshroudedserver/enshrouded_server.json',
+                note: 'Die Datei wird bei der ersten Ausführung automatisch erstellt. Ändern Sie "slotCount" auf eine niedrige Zahl wie 8.'
+            },
+            {
+                title: 'Schritt 9: Proxmox Firewall konfigurieren',
+                description: 'Aktivieren Sie die Proxmox-Firewall und erstellen Sie Regeln, um den Spielverkehr zu erlauben. Sie müssen die Ports 15636 (Spiel) und 15637 (Abfrage) für TCP und UDP öffnen.',
+                command: null,
+                note: 'Führen Sie diesen Schritt im Proxmox-Webinterface aus.'
+            },
+            {
+                title: 'Schritt 10: Router-Port-Forwarding',
+                description: 'Melden Sie sich in der Verwaltungsoberfläche Ihres Routers an und erstellen Sie Port-Forwarding-Regeln, um den Datenverkehr von Ihrer öffentlichen IP-Adresse an die lokale IP-Adresse Ihres Proxmox-Hosts weiterzuleiten.',
+                command: null,
+                note: 'Leiten Sie die Ports 15636-15637 für TCP und UDP weiter.'
+            },
+            {
+                title: 'Schritt 11: Server starten',
+                description: 'Ihr Server ist nun bereit zum Starten! Führen Sie diesen Befehl aus, um ihn zu starten.',
+                command: './enshroudedserver start',
+                note: 'Nach dem Start können Sie den Server mit "./enshroudedserver details" überwachen.'
+            }
+        ];
+
+        let currentStep = 0;
+        const stepTitle = document.getElementById('step-title');
+        const stepDescription = document.getElementById('step-description');
+        const stepCommand = document.getElementById('step-command');
+        const stepCommandBlock = document.getElementById('step-command-block');
+        const stepNote = document.getElementById('step-note');
+        const prevButton = document.getElementById('prev-button');
+        const nextButton = document.getElementById('next-button');
+        const totalStepsSpan = document.getElementById('total-steps');
+        const currentStepNumberSpan = document.getElementById('current-step-number');
+        const copyButton = document.getElementById('copy-button');
+
+        totalStepsSpan.textContent = steps.length;
+
+        function showStep(index) {
+            currentStep = index;
+            const step = steps[currentStep];
+            stepTitle.textContent = step.title;
+            stepDescription.textContent = step.description;
+
+            if (step.details) {
+                stepDescription.innerHTML = step.description + '<ul class="list-disc list-inside mt-2">' + step.details.map(item => `<li>${item}</li>`).join('') + '</ul>';
+            } else {
+                stepDescription.innerHTML = step.description;
+            }
+
+            if (step.command) {
+                stepCommand.textContent = step.command;
+                stepCommandBlock.classList.remove('hidden');
+            } else {
+                stepCommand.textContent = '';
+                stepCommandBlock.classList.add('hidden');
+            }
+
+            if (step.note) {
+                stepNote.textContent = step.note;
+                stepNote.classList.remove('hidden');
+            } else {
+                stepNote.textContent = '';
+                stepNote.classList.add('hidden');
+            }
+
+            prevButton.disabled = currentStep === 0;
+            nextButton.disabled = currentStep === steps.length - 1;
+            currentStepNumberSpan.textContent = currentStep + 1;
+        }
+
+        prevButton.addEventListener('click', () => {
+            if (currentStep > 0) {
+                showStep(currentStep - 1);
+            }
+        });
+
+        nextButton.addEventListener('click', () => {
+            if (currentStep < steps.length - 1) {
+                showStep(currentStep + 1);
+            }
+        });
+
+        copyButton.addEventListener('click', () => {
+            const commandToCopy = stepCommand.textContent;
+            const tempInput = document.createElement('textarea');
+            tempInput.value = commandToCopy;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+            
+            const originalText = copyButton.textContent;
+            copyButton.textContent = 'Kopiert!';
+            setTimeout(() => {
+                copyButton.textContent = originalText;
+            }, 2000);
+        });
+
+        showStep(0);
+    </script>
+</body>
+</html>
